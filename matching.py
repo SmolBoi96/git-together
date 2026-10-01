@@ -9,14 +9,22 @@ combined rank of each pair.
 """
 
 from collections import deque
+from typing import NamedTuple
 
 BYE = "__bye__"  # dummy partner used when the pool has an odd size
+LANG_SLOTS = 3  # each person lists their top 3 languages
+
+
+class Matching(NamedTuple):
+    match: dict   # id -> partner id, or None for whoever sits out
+    method: str   # "stable" or "greedy"
+    prefs: dict   # the complete preference lists the match was computed from
 
 
 def language_score(langs_a, langs_b):
     """Weighted overlap of two top-3 lists: a shared #1 counts more than a shared #3."""
-    weights_b = {lang: 3 - i for i, lang in enumerate(langs_b)}
-    return sum((3 - i) * weights_b[lang] for i, lang in enumerate(langs_a) if lang in weights_b)
+    weights_b = {lang: LANG_SLOTS - i for i, lang in enumerate(langs_b)}
+    return sum((LANG_SLOTS - i) * weights_b[lang] for i, lang in enumerate(langs_a) if lang in weights_b)
 
 
 def build_preferences(people, rankings, languages):
@@ -133,26 +141,27 @@ def greedy_match(prefs):
 def compute_matching(people, rankings, languages):
     """Match everyone in the pool.
 
-    Returns (match, method) where match maps id -> partner id (or None for the
-    person sitting out when the pool is odd) and method is "stable" or "greedy".
+    Returns a Matching: match maps id -> partner id (or None for the person
+    sitting out when the pool is odd), method is "stable" or "greedy", and
+    prefs are the preference lists from build_preferences that were used.
     """
-    if len(people) < 2:
-        return {p: None for p in people}, "stable"
-
     prefs = build_preferences(people, rankings, languages)
+    if len(people) < 2:
+        return Matching({p: None for p in people}, "stable", prefs)
+
+    table = {p: list(lst) for p, lst in prefs.items()}
     if len(people) % 2:
         # Everyone ranks the bye last; the bye prefers the newest signups, who
         # have had the least time to be ranked by others.
         for p in people:
-            prefs[p].append(BYE)
-        prefs[BYE] = list(reversed(people))
+            table[p].append(BYE)
+        table[BYE] = list(reversed(people))
 
-    match = stable_roommates(prefs)
+    match = stable_roommates(table)
     method = "stable"
     if match is None:
-        real = {p: [q for q in lst if q != BYE] for p, lst in prefs.items() if p != BYE}
-        match = greedy_match(real)
+        match = greedy_match(prefs)
         method = "greedy"
 
     result = {p: (None if match.get(p) in (None, BYE) else match[p]) for p in people}
-    return result, method
+    return Matching(result, method, prefs)

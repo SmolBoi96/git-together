@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash
 
 import db
 from app import LANGUAGES, create_app
+from matching import LANG_SLOTS
 
 NAMES = [
     "ada", "linus", "grace", "dennis", "ken", "margaret", "guido", "bjarne",
@@ -34,7 +35,7 @@ def main():
         created = []
         with conn:
             for name in NAMES[: args.count]:
-                langs = rng.sample(LANGUAGES, 3)
+                langs = rng.sample(LANGUAGES, LANG_SLOTS)
                 cur = conn.execute(
                     "INSERT OR IGNORE INTO users (username, password_hash, lang1, lang2, lang3) "
                     "VALUES (?, ?, ?, ?, ?)",
