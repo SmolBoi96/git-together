@@ -19,7 +19,7 @@ The UI is a terminal: the profile page is `vim ~/.profile`, ranking is a
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements.txt   # -r requirements-dev.txt to run the tests
 .venv/bin/flask --app app run          # http://127.0.0.1:5000
 ```
 

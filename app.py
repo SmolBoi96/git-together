@@ -7,7 +7,7 @@ from flask import Flask, abort, flash, g, redirect, render_template, request, se
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
-from matching import build_preferences, compute_matching
+from matching import LANG_SLOTS, build_preferences, compute_matching
 
 LANGUAGES = sorted([
     "Assembly", "Bash", "C", "C#", "C++", "Clojure", "Dart", "Elixir", "Erlang",
@@ -65,7 +65,18 @@ def profile_required(view):
 
 
 def langs_of(user):
-    return [l for l in (user["lang1"], user["lang2"], user["lang3"]) if l]
+    return [l for l in (user[f"lang{i}"] for i in range(1, LANG_SLOTS + 1)) if l]
+
+
+def shared_langs(langs, other):
+    """The languages in `langs` that `other` also lists, in `langs` order."""
+    return [l for l in langs if l in other]
+
+
+def pool_inputs():
+    """The pool as matching inputs: ({id: user row}, {id: languages}), in signup order."""
+    by_id = {u["id"]: u for u in db.pool()}
+    return by_id, {uid: langs_of(u) for uid, u in by_id.items()}
 
 
 def _register(app):
@@ -152,17 +163,19 @@ def _register(app):
     @login_required
     def profile():
         if request.method == "POST":
-            picks = [request.form.get(f"lang{i}", "") for i in (1, 2, 3)]
+            picks = [request.form.get(f"lang{i}", "") for i in range(1, LANG_SLOTS + 1)]
             if any(p not in LANGUAGES for p in picks):
                 flash("pick a language from the list for all three slots.", "err")
-            elif len(set(picks)) != 3:
+            elif len(set(picks)) != LANG_SLOTS:
                 flash("no duplicates - three different languages please.", "err")
             else:
                 first_time = g.user["lang1"] is None
                 conn = db.get_db()
                 with conn:
                     conn.execute(
-                        "UPDATE users SET lang1 = ?, lang2 = ?, lang3 = ? WHERE id = ?",
+                        "UPDATE users SET "
+                        + ", ".join(f"lang{i} = ?" for i in range(1, LANG_SLOTS + 1))
+                        + " WHERE id = ?",
                         (*picks, g.user["id"]),
                     )
                 flash("profile committed.", "ok")
@@ -172,8 +185,7 @@ def _register(app):
     @app.route("/rank", methods=["GET", "POST"])
     @profile_required
     def rank():
-        people = db.pool()
-        by_id = {u["id"]: u for u in people}
+        by_id, languages = pool_inputs()
         me = g.user["id"]
 
         if request.method == "POST":
@@ -185,17 +197,14 @@ def _register(app):
             db.save_ranking(me, order)
             return redirect(url_for("match"))
 
-        ids = [u["id"] for u in people]
         saved = db.rankings_for([me]).get(me, [])
-        languages = {u["id"]: langs_of(u) for u in people}
-        prefs = build_preferences(ids, {me: saved}, languages).get(me, [])
-        mine = set(langs_of(g.user))
+        prefs = build_preferences(list(by_id), {me: saved}, languages).get(me, [])
         others = [
             {
                 "id": uid,
                 "username": by_id[uid]["username"],
                 "langs": languages[uid],
-                "shared": [l for l in languages[uid] if l in mine],
+                "shared": shared_langs(languages[uid], languages[me]),
                 "new": uid not in saved,
             }
             for uid in prefs
@@ -205,29 +214,24 @@ def _register(app):
     @app.route("/match")
     @profile_required
     def match():
-        people = db.pool()
-        by_id = {u["id"]: u for u in people}
+        by_id, languages = pool_inputs()
         ids = list(by_id)
-        rankings = db.rankings_for(ids)
-        languages = {uid: langs_of(u) for uid, u in by_id.items()}
-        result, method = compute_matching(ids, rankings, languages)
+        matching = compute_matching(ids, db.rankings_for(ids), languages)
 
         me = g.user["id"]
-        partner_id = result.get(me)
+        partner_id = matching.match.get(me)
         partner = None
         if partner_id is not None:
-            prefs = build_preferences(ids, rankings, languages)
-            p = by_id[partner_id]
             partner = {
-                "username": p["username"],
+                "username": by_id[partner_id]["username"],
                 "langs": languages[partner_id],
-                "shared": [l for l in languages[partner_id] if l in languages[me]],
-                "my_rank": prefs[me].index(partner_id) + 1,
+                "shared": shared_langs(languages[partner_id], languages[me]),
+                "my_rank": matching.prefs[me].index(partner_id) + 1,
             }
         stats = {
             "pool": len(ids),
-            "ranked": sum(1 for u in people if u["ranked_at"]),
-            "method": method,
+            "ranked": sum(1 for u in by_id.values() if u["ranked_at"]),
+            "method": matching.method,
         }
         return render_template("match.html", partner=partner, stats=stats)
 

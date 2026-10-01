@@ -65,7 +65,7 @@ def test_no_stable_matching_falls_back_to_greedy():
         "d": ["a", "b", "c"],
     }
     people = list(rankings)
-    match, method = compute_matching(people, rankings, {})
+    match, method, _ = compute_matching(people, rankings, {})
     assert method == "greedy"
     assert all(match[match[p]] == p for p in people)
 
@@ -74,7 +74,7 @@ def test_odd_pool_leaves_exactly_one_out():
     rng = random.Random(7)
     people = list(range(5))
     rankings = random_prefs(5, rng)
-    match, _ = compute_matching(people, rankings, {})
+    match = compute_matching(people, rankings, {}).match
     assert sum(1 for p in people if match[p] is None) == 1
     for p in people:
         if match[p] is not None:
@@ -82,9 +82,20 @@ def test_odd_pool_leaves_exactly_one_out():
 
 
 def test_tiny_pools():
-    assert compute_matching([], {}, {}) == ({}, "stable")
-    assert compute_matching([1], {}, {}) == ({1: None}, "stable")
-    assert compute_matching([1, 2], {}, {})[0] == {1: 2, 2: 1}
+    assert compute_matching([], {}, {})[:2] == ({}, "stable")
+    assert compute_matching([1], {}, {})[:2] == ({1: None}, "stable")
+    assert compute_matching([1, 2], {}, {}).match == {1: 2, 2: 1}
+
+
+def test_compute_matching_returns_the_prefs_it_used():
+    people = [1, 2, 3]  # odd, so the bye is involved internally
+    langs = {1: ["Rust", "Go", "C"], 2: ["Java", "C#", "Kotlin"], 3: ["Rust", "C", "Zig"]}
+    rankings = {2: [3, 1]}
+    result = compute_matching(people, rankings, langs)
+    assert result.prefs == build_preferences(people, rankings, langs)
+    for p in people:
+        if result.match[p] is not None:
+            assert result.match[p] in result.prefs[p]
 
 
 def test_language_score_weights_rank():
