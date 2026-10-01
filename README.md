@@ -23,7 +23,8 @@ python3 -m venv .venv
 .venv/bin/flask --app app run          # http://127.0.0.1:5000
 ```
 
-Optional demo data (every account's password is `password123`):
+Optional demo data. The accounts share a random password, printed when the
+script finishes (pass `--password` to choose one):
 
 ```bash
 .venv/bin/python seed.py --count 9     # --no-rank to leave rankings empty
@@ -38,7 +39,8 @@ Run the tests:
 ## How it works
 
 1. **Register / log in.** Passwords are hashed with Werkzeug (scrypt/pbkdf2);
-   every form carries a CSRF token.
+   every form carries a CSRF token. After 5 failed logins for a username, or 20
+   from one IP, `/login` returns 429 for 15 minutes.
 2. **Profile.** Pick your top 3 languages (ordered, no duplicates).
 3. **Rank.** Every login drops you on the rank page so you can re-sort the
    pool. Reorder by dragging, with the arrow buttons, or with vim keys

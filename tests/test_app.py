@@ -124,3 +124,54 @@ def test_rank_ignores_unknown_and_self_ids(app):
     r = alice.post("/rank", order=["1", "999", "abc", "2", "2"])
     assert r.status_code == 302
     assert alice.partner() == "bob"
+
+
+def test_login_locks_out_username_after_repeated_failures(app):
+    alice = Dev(app, "alice")
+    alice.post("/logout")
+    for _ in range(app.config["LOGIN_MAX_PER_USER"]):
+        assert "permission denied" in alice.post("/login", follow=True, username="alice", password="nope").text
+    # Even the right password is refused while locked, and a case change doesn't dodge it.
+    r = alice.post("/login", username="ALICE", password="hunter222")
+    assert r.status_code == 429
+    assert "too many failed attempts" in r.text
+
+
+def test_login_lockout_applies_to_unknown_usernames_too(app):
+    c = Dev.__new__(Dev)
+    c.client = app.test_client()
+    for _ in range(app.config["LOGIN_MAX_PER_USER"]):
+        c.post("/login", username="ghost", password="nope")
+    assert c.post("/login", username="ghost", password="nope").status_code == 429
+
+
+def test_login_limits_failures_per_ip(app):
+    app.config["LOGIN_MAX_PER_IP"] = 3
+    alice = Dev(app, "alice")
+    alice.post("/logout")
+    for name in ("x1", "x2", "x3"):
+        alice.post("/login", username=name, password="nope")
+    assert alice.post("/login", username="alice", password="hunter222").status_code == 429
+
+
+def test_successful_login_resets_username_failures(app):
+    alice = Dev(app, "alice")
+    alice.post("/logout")
+    for _ in range(app.config["LOGIN_MAX_PER_USER"] - 1):
+        alice.post("/login", username="alice", password="nope")
+    assert alice.post("/login", username="alice", password="hunter222").status_code == 302
+    alice.post("/logout")
+    for _ in range(app.config["LOGIN_MAX_PER_USER"] - 1):
+        alice.post("/login", username="alice", password="nope")
+    assert alice.post("/login", username="alice", password="hunter222").status_code == 302
+
+
+def test_unknown_username_still_checks_a_password_hash(app, monkeypatch):
+    import app as app_module
+    calls = []
+    real = app_module.check_password_hash
+    monkeypatch.setattr(app_module, "check_password_hash", lambda h, p: calls.append(h) or real(h, p))
+    c = Dev.__new__(Dev)
+    c.client = app.test_client()
+    c.post("/login", username="ghost", password="nope")
+    assert calls == [app_module._DUMMY_HASH]
