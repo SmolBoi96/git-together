@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}match · git-together{% endblock %}
+{% block path %}match{% endblock %}
+{% block content %}
+<p class="out">$ ./match --algo=irving --pool={{ stats.pool }}</p>
+<p class="out dim">loading rankings... {{ stats.ranked }}/{{ stats.pool }} devs have ranked (the rest are sorted by language overlap)</p>
+
+{% if stats.method == 'greedy' %}
+<p class="flash warn"><span class="tag">[ WARN ]</span>
+  no stable matching exists for the current rankings - fell back to greedy (lowest combined rank).</p>
+{% endif %}
+
+{% if partner %}
+<p class="out">Merge made by the '{{ 'stable-roommates' if stats.method == 'stable' else 'greedy' }}' strategy.</p>
+<div class="match-card">
+  <pre class="diff">
+<span class="meta">diff --git a/{{ user.username }} b/{{ partner.username }}</span>
+<span class="hunk">@@ you ranked them #{{ partner.my_rank }} @@</span>
+{% for l in partner.langs %}{% if l in partner.shared %}<span class="add">+ {{ l }}</span>{% else %}<span class="ctx">  {{ l }}</span>{% endif %}
+{% endfor %}</pre>
+  <p class="pair"><span class="you">{{ user.username }}</span> <span class="arrow">&lt;=&gt;</span> <span class="them">{{ partner.username }}</span></p>
+  {% if partner.shared %}
+  <p class="comment"># {{ partner.shared|length }} shared language{{ 's' if partner.shared|length > 1 }}. go build something.</p>
+  {% else %}
+  <p class="comment"># zero overlap. perfect excuse to learn something new.</p>
+  {% endif %}
+</div>
+{% elif stats.pool < 2 %}
+<p class="out">Already up to date.</p>
+<p class="comment"># you're the only dev here. matches appear once someone else signs up.</p>
+{% else %}
+<p class="out">HEAD detached: odd number of devs, so you're on the bench this round.</p>
+<p class="comment"># the next signup gets paired with you.</p>
+{% endif %}
+
+<p class="comment">// matches are recomputed live from everyone's latest ranking, so yours may change as others re-rank.</p>
+<p><a class="btn" href="{{ url_for('rank') }}">git rebase -i</a></p>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}register · git-together{% endblock %}
+{% block path %}register{% endblock %}
+{% block mode %}INSERT{% endblock %}
+{% block content %}
+{% include "_banner.html" %}
+<p class="out">$ sudo useradd --create-home</p>
+<form method="post" class="tty-form" autocomplete="on">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label>username: <input name="username" required autofocus autocomplete="username" spellcheck="false"
+         pattern="[A-Za-z0-9_\-]{3,20}" title="3-20 chars: letters, digits, _ or -"></label>
+  <label>new password: <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+  <label>retype new password: <input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label>
+  <button type="submit" class="btn">[ create ]</button>
+</form>
+<p class="comment">already have an account? <a href="{{ url_for('login') }}">ssh in</a></p>
+{% endblock %}

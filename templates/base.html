@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}git-together{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="term">
+    <header class="titlebar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="title">{{ user.username if user else 'guest' }}@git-together: ~/{% block path %}{% endblock %}</span>
+    </header>
+
+    {% if user %}
+    <nav class="nav">
+      <span class="prompt">$</span>
+      <a href="{{ url_for('profile') }}" class="{{ 'on' if request.endpoint == 'profile' }}">vim ~/.profile</a>
+      <a href="{{ url_for('rank') }}" class="{{ 'on' if request.endpoint == 'rank' }}">git rebase -i</a>
+      <a href="{{ url_for('match') }}" class="{{ 'on' if request.endpoint == 'match' }}">./match</a>
+      <form method="post" action="{{ url_for('logout') }}" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button type="submit" class="link">exit</button>
+      </form>
+    </nav>
+    {% endif %}
+
+    <section class="screen">
+      {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="flash {{ category }}">
+          <span class="tag">{{ {'ok': '[  OK  ]', 'err': '[FAILED]', 'warn': '[ WARN ]'}.get(category, '[ INFO ]') }}</span>
+          {{ message }}
+        </p>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </section>
+
+    <footer class="statusbar">
+      <span class="mode">{% block mode %}NORMAL{% endblock %}</span>
+      <span>git-together</span>
+      <span class="branch">&#x2387; main</span>
+      <span class="spacer"></span>
+      <span>utf-8</span>
+      <span>{% if user %}{{ user.username }}{% else %}not logged in{% endif %}</span>
+    </footer>
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}rank · git-together{% endblock %}
+{% block path %}.git/rebase-merge/git-rebase-todo{% endblock %}
+{% block content %}
+<p class="out">$ git rebase -i --onto friendship HEAD~{{ others|length }}</p>
+
+{% if not others %}
+<p class="comment"># nothing to rank yet - you're the only dev in the pool.</p>
+<p class="comment"># share the link and check back once others have signed up.</p>
+{% else %}
+<form method="post" id="rank-form">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <ol class="todo" id="todo" role="listbox" aria-label="Ranking, most preferred first">
+    {% for o in others %}
+    <li class="todo-line" draggable="true" tabindex="0" role="option" data-id="{{ o.id }}">
+      <input type="hidden" name="order" value="{{ o.id }}">
+      <span class="pick">pick</span>
+      <span class="hash">#{{ loop.index }}</span>
+      <span class="who">{{ o.username }}</span>
+      <span class="langs">
+        {% for l in o.langs %}<span class="lang {{ 'shared' if l in o.shared }}">{{ l }}</span>{% endfor %}
+      </span>
+      {% if o.new %}<span class="badge">new</span>{% endif %}
+      <span class="moves">
+        <button type="button" class="mv" data-dir="-1" aria-label="Move {{ o.username }} up">&uarr;</button>
+        <button type="button" class="mv" data-dir="1" aria-label="Move {{ o.username }} down">&darr;</button>
+      </span>
+    </li>
+    {% endfor %}
+  </ol>
+
+  <pre class="comment help">
+# Rebase your friendships onto HEAD ({{ others|length }} devs)
+#
+# Lines are executed top to bottom: first line = the dev you'd most like to pair with.
+{% if not has_saved %}# You haven't ranked anyone yet, so this list is pre-sorted by shared languages.
+{% endif %}#
+# Keys:  j/k  move cursor     J/K  move line     (or drag, or use the arrows)
+#        :wq  save and compute your match
+#
+# Highlighted languages are ones you share.</pre>
+  <button type="submit" class="btn">:wq</button>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='rank.js') }}"></script>
+{% endblock %}

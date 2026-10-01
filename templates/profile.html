@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}profile · git-together{% endblock %}
+{% block path %}.profile{% endblock %}
+{% block mode %}INSERT{% endblock %}
+{% block content %}
+<p class="out">$ vim ~/.profile</p>
+<form method="post" class="config">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <p class="comment"># ~/.profile for {{ user.username }}</p>
+  <p class="comment"># your top 3 languages. order matters: a shared #1 beats a shared #3.</p>
+  <p><span class="kw">[languages]</span></p>
+  {% for slot in ['primary', 'secondary', 'tertiary'] %}
+  {% set i = loop.index %}
+  <label class="kv">
+    <span class="key">{{ slot }}</span><span class="eq"> = </span>
+    <select name="lang{{ i }}" required>
+      <option value="" disabled {{ 'selected' if current|length < i }}>-- choose --</option>
+      {% for lang in languages %}
+      <option value="{{ lang }}" {{ 'selected' if current|length >= i and current[i-1] == lang }}>{{ lang }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endfor %}
+  <p class="tilde">~</p>
+  <button type="submit" class="btn">:wq</button>
+</form>
+{% endblock %}
