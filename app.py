@@ -1,6 +1,8 @@
 import os
 import re
 import secrets
+import threading
+import time
 from functools import wraps
 
 from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
@@ -28,12 +30,53 @@ def create_app(test_config=None):
         DATABASE=os.path.join(app.instance_path, "git-together.db"),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        LOGIN_MAX_FAILURES=5,
+        LOGIN_WINDOW_SECONDS=15 * 60,
     )
     if test_config:
         app.config.update(test_config)
     db.init_db(app)
     _register(app)
     return app
+
+
+class LoginThrottle:
+    """Counts failed logins per key over a sliding window.
+
+    In-memory and per-process, which is enough for a single small instance.
+    """
+
+    def __init__(self, limit, window):
+        self.limit = limit
+        self.window = window
+        self._failures = {}
+        self._lock = threading.Lock()
+
+    def _recent(self, key, now):
+        times = [t for t in self._failures.get(key, ()) if now - t < self.window]
+        if times:
+            self._failures[key] = times
+        else:
+            self._failures.pop(key, None)
+        return times
+
+    def blocked(self, *keys):
+        now = time.monotonic()
+        with self._lock:
+            return any(len(self._recent(k, now)) >= self.limit for k in keys)
+
+    def fail(self, *keys):
+        now = time.monotonic()
+        with self._lock:
+            if len(self._failures) > 10_000:
+                for k in list(self._failures):
+                    self._recent(k, now)
+            for k in keys:
+                self._failures[k] = self._recent(k, now) + [now]
+
+    def clear(self, key):
+        with self._lock:
+            self._failures.pop(key, None)
 
 
 def _instance_secret(instance_path):
@@ -69,6 +112,10 @@ def langs_of(user):
 
 
 def _register(app):
+    throttle = LoginThrottle(app.config["LOGIN_MAX_FAILURES"], app.config["LOGIN_WINDOW_SECONDS"])
+    # Checked when the username doesn't exist, so both cases cost one hash check.
+    dummy_hash = generate_password_hash(secrets.token_hex(16))
+
     @app.before_request
     def load_user_and_check_csrf():
         uid = session.get("user_id")
@@ -129,12 +176,24 @@ def _register(app):
     def login():
         if request.method == "POST":
             username = request.form.get("username", "").strip()
+            # Usernames are case-insensitive (COLLATE NOCASE), so key on the lowercase form.
+            keys = (f"ip:{request.remote_addr}", f"user:{username.lower()}")
+            if throttle.blocked(*keys):
+                flash("too many failed attempts. try again later.", "err")
+                return render_template("login.html"), 429
             user = db.get_db().execute(
                 "SELECT * FROM users WHERE username = ?", (username,)
             ).fetchone()
-            if user is None or not check_password_hash(user["password_hash"], request.form.get("password", "")):
+            password_ok = check_password_hash(
+                user["password_hash"] if user else dummy_hash, request.form.get("password", "")
+            )
+            if user is None or not password_ok:
+                throttle.fail(*keys)
                 flash("permission denied (publickey,password).", "err")
             else:
+                # Only the username counter resets; logging into your own account
+                # shouldn't reset the per-IP counter.
+                throttle.clear(keys[1])
                 session.clear()
                 session["user_id"] = user["id"]
                 if user["lang1"] is None:
@@ -233,4 +292,5 @@ def _register(app):
 
 
 if __name__ == "__main__":
-    create_app().run(debug=True)
+    # Flask turns on debug mode (and the Werkzeug debugger) only if FLASK_DEBUG is set.
+    create_app().run()
