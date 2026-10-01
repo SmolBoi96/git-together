@@ -11,12 +11,13 @@
   <p><span class="kw">[languages]</span></p>
   {% for slot in ['primary', 'secondary', 'tertiary'] %}
   {% set i = loop.index %}
+  {% set pick = current[i-1] if current|length >= i else '' %}
   <label class="kv">
     <span class="key">{{ slot }}</span><span class="eq"> = </span>
     <select name="lang{{ i }}" required>
-      <option value="" disabled {{ 'selected' if current|length < i }}>-- choose --</option>
+      <option value="" disabled {{ 'selected' if pick not in languages }}>-- choose --</option>
       {% for lang in languages %}
-      <option value="{{ lang }}" {{ 'selected' if current|length >= i and current[i-1] == lang }}>{{ lang }}</option>
+      <option value="{{ lang }}" {{ 'selected' if pick == lang }}>{{ lang }}</option>
       {% endfor %}
     </select>
   </label>
@@ -24,4 +25,7 @@
   <p class="tilde">~</p>
   <button type="submit" class="btn">:wq</button>
 </form>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='forms.js') }}"></script>
 {% endblock %}
