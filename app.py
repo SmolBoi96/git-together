@@ -238,7 +238,7 @@ def _register(app):
         if request.method == "POST":
             seen, order = set(), []
             for raw in request.form.getlist("order"):
-                if raw.isdigit() and int(raw) in by_id and int(raw) != me and int(raw) not in seen:
+                if raw.isascii() and raw.isdigit() and int(raw) in by_id and int(raw) != me and int(raw) not in seen:
                     seen.add(int(raw))
                     order.append(int(raw))
             db.save_ranking(me, order)
