@@ -196,3 +196,12 @@ def test_unknown_username_still_checks_a_hash(app, monkeypatch):
     r = anon(app).post("/login", username="nobody", password="whatever1")
     assert "permission denied" in r.text
     assert len(calls) == 1
+
+
+def test_rank_ignores_non_ascii_digits(app):
+    alice = Dev(app, "alice")
+    Dev(app, "bob")
+    # "²" passes str.isdigit() but int() rejects it.
+    r = alice.post("/rank", order=["²", "2"])
+    assert r.status_code == 302
+    assert alice.partner() == "bob"
