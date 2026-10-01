@@ -3,7 +3,7 @@
 {% block path %}match{% endblock %}
 {% block content %}
 <p class="out">$ ./match --algo=irving --pool={{ stats.pool }}</p>
-<p class="out dim">loading rankings... {{ stats.ranked }}/{{ stats.pool }} devs have ranked (the rest are sorted by language overlap)</p>
+<p class="out dim">loading rankings... {{ stats.ranked }}/{{ stats.pool }} devs have ranked{% if stats.ranked < stats.pool %} (the rest are sorted by language overlap){% endif %}</p>
 
 {% if stats.method == 'greedy' %}
 <p class="flash warn"><span class="tag">[ WARN ]</span>
