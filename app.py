@@ -97,6 +97,7 @@ def _register(app):
 
     @app.route("/register", methods=["GET", "POST"])
     def register():
+        username = ""
         if request.method == "POST":
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
@@ -123,7 +124,7 @@ def _register(app):
                     flash(f"user {username} created. welcome aboard.", "ok")
                     return redirect(url_for("profile"))
             flash(error, "err")
-        return render_template("register.html")
+        return render_template("register.html", username=username)
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -151,8 +152,10 @@ def _register(app):
     @app.route("/profile", methods=["GET", "POST"])
     @login_required
     def profile():
+        current = langs_of(g.user)
         if request.method == "POST":
             picks = [request.form.get(f"lang{i}", "") for i in (1, 2, 3)]
+            current = picks
             if any(p not in LANGUAGES for p in picks):
                 flash("pick a language from the list for all three slots.", "err")
             elif len(set(picks)) != 3:
@@ -167,7 +170,7 @@ def _register(app):
                     )
                 flash("profile committed.", "ok")
                 return redirect(url_for("rank") if first_time else url_for("profile"))
-        return render_template("profile.html", languages=LANGUAGES, current=langs_of(g.user))
+        return render_template("profile.html", languages=LANGUAGES, current=current)
 
     @app.route("/rank", methods=["GET", "POST"])
     @profile_required

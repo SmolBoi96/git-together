@@ -70,6 +70,22 @@ def test_register_validation_and_duplicates(app):
                                   password="hunter222", confirm="hunter222").text
 
 
+def test_register_error_keeps_username(app):
+    c = Dev.__new__(Dev)
+    c.client = app.test_client()
+    r = c.post("/register", username="carol", password="hunter222", confirm="hunter333")
+    assert "passwords do not match" in r.text
+    assert 'name="username" value="carol"' in r.text
+
+
+def test_profile_error_keeps_picks(app):
+    bob = Dev(app, "bob", langs=None)
+    r = bob.post("/profile", lang1="Rust", lang2="Go", lang3="Rust")
+    assert "no duplicates" in r.text
+    selected = re.findall(r'<option value="(\w*)"[^>]*selected', r.text)
+    assert selected == ["Rust", "Go", "Rust"]
+
+
 def test_login_logout_and_bad_password(app):
     alice = Dev(app, "alice")
     alice.post("/logout")
