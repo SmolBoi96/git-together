@@ -1,4 +1,5 @@
 import sqlite3
+import time
 
 from flask import current_app, g
 
@@ -20,6 +21,12 @@ CREATE TABLE IF NOT EXISTS rankings (
     position  INTEGER NOT NULL,
     PRIMARY KEY (ranker_id, ranked_id)
 );
+
+CREATE TABLE IF NOT EXISTS login_failures (
+    key TEXT NOT NULL,
+    at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS login_failures_key ON login_failures (key, at);
 """
 
 
@@ -71,3 +78,25 @@ def save_ranking(user_id, ordered_ids):
             [(user_id, other, i) for i, other in enumerate(ordered_ids)],
         )
         db.execute("UPDATE users SET ranked_at = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+
+
+def recent_failures(key, window):
+    """Failed logins recorded against `key` in the last `window` seconds."""
+    return get_db().execute(
+        "SELECT COUNT(*) FROM login_failures WHERE key = ? AND at > ?",
+        (key, time.time() - window),
+    ).fetchone()[0]
+
+
+def record_failure(keys, window):
+    db = get_db()
+    now = time.time()
+    with db:
+        db.execute("DELETE FROM login_failures WHERE at <= ?", (now - window,))
+        db.executemany("INSERT INTO login_failures (key, at) VALUES (?, ?)", [(k, now) for k in keys])
+
+
+def clear_failures(key):
+    db = get_db()
+    with db:
+        db.execute("DELETE FROM login_failures WHERE key = ?", (key,))

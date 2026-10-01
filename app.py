@@ -19,6 +19,9 @@ LANGUAGES = sorted([
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_-]{3,20}$")
 MIN_PASSWORD = 8
 
+# Checked when the username doesn't exist, so a miss costs the same as a wrong password.
+_DUMMY_HASH = generate_password_hash(secrets.token_hex(16))
+
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
@@ -28,6 +31,10 @@ def create_app(test_config=None):
         DATABASE=os.path.join(app.instance_path, "git-together.db"),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        # Failed logins allowed per username / per client IP within the window.
+        LOGIN_MAX_PER_USER=5,
+        LOGIN_MAX_PER_IP=20,
+        LOGIN_WINDOW=15 * 60,
     )
     if test_config:
         app.config.update(test_config)
@@ -129,12 +136,23 @@ def _register(app):
     def login():
         if request.method == "POST":
             username = request.form.get("username", "").strip()
+            cfg = app.config
+            user_key = f"user:{username.lower()}"
+            ip_key = f"ip:{request.remote_addr}"
+            if (db.recent_failures(user_key, cfg["LOGIN_WINDOW"]) >= cfg["LOGIN_MAX_PER_USER"]
+                    or db.recent_failures(ip_key, cfg["LOGIN_WINDOW"]) >= cfg["LOGIN_MAX_PER_IP"]):
+                flash("too many failed attempts. try again later.", "err")
+                return render_template("login.html"), 429
             user = db.get_db().execute(
                 "SELECT * FROM users WHERE username = ?", (username,)
             ).fetchone()
-            if user is None or not check_password_hash(user["password_hash"], request.form.get("password", "")):
+            password = request.form.get("password", "")
+            ok = check_password_hash(user["password_hash"] if user else _DUMMY_HASH, password)
+            if user is None or not ok:
+                db.record_failure([user_key, ip_key], cfg["LOGIN_WINDOW"])
                 flash("permission denied (publickey,password).", "err")
             else:
+                db.clear_failures(user_key)
                 session.clear()
                 session["user_id"] = user["id"]
                 if user["lang1"] is None:
@@ -233,4 +251,4 @@ def _register(app):
 
 
 if __name__ == "__main__":
-    create_app().run(debug=True)
+    create_app().run(debug=os.environ.get("FLASK_DEBUG") == "1")
